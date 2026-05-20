@@ -60,6 +60,14 @@ if [[ ! -t 1 ]]; then
   BOLD=""; DIM=""; RESET=""; GREEN=""; RED=""; YELLOW=""; CYAN=""
 fi
 
+# Timeout for reading the tail of an escape sequence (e.g. the "[A" after ESC
+# when an arrow key is pressed). Bash < 4.0 — notably macOS's stock 3.2 — only
+# accepts integer `read -t` values and errors on fractional ones, which would
+# silently drop the arrow tail and freeze cursor navigation. Arrow tails are
+# already buffered, so `read -n2` returns instantly regardless; the timeout only
+# bounds a lone ESC keypress, which the menus ignore anyway.
+if ((BASH_VERSINFO[0] >= 4)); then ESC_SEQ_TIMEOUT=0.01; else ESC_SEQ_TIMEOUT=1; fi
+
 die() { printf '%serror:%s %s\n' "$RED" "$RESET" "$*" >&2; exit 1; }
 warn() { printf '%s!%s %s\n' "$YELLOW" "$RESET" "$*"; }
 ok() { printf '%s✓%s %s\n' "$GREEN" "$RESET" "$*"; }
@@ -262,7 +270,7 @@ multiselect() {
     IFS= read -rsn1 key </dev/tty || true
     if [[ "$key" == $'\033' ]]; then
       local rest=""
-      IFS= read -rsn2 -t 0.01 rest </dev/tty || true
+      IFS= read -rsn2 -t "$ESC_SEQ_TIMEOUT" rest </dev/tty || true
       key="$key$rest"
     fi
     # Cursor wraps with modular arithmetic (top↑ → bottom, bottom↓ → top).
@@ -337,7 +345,7 @@ single_select() {
     IFS= read -rsn1 key </dev/tty || true
     if [[ "$key" == $'\033' ]]; then
       local rest=""
-      IFS= read -rsn2 -t 0.01 rest </dev/tty || true
+      IFS= read -rsn2 -t "$ESC_SEQ_TIMEOUT" rest </dev/tty || true
       key="$key$rest"
     fi
     # Cursor wraps with modular arithmetic.
